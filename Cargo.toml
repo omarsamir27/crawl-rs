@@ -1,0 +1,28 @@
+[package]
+name = "txtcrawl"
+version = "0.1.0"
+edition = "2021"
+
+#[profile.dev]
+#opt-level = 3
+
+[lib]
+name = "libcrawl"
+path = "src/lib/lib.rs"
+
+[[bin]]
+name = "txtcrawl"
+path = "src/bin/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = {version = "*" , features = ["full"]}
+reqwest =  {version = "*" , features = ["gzip"]}
+futures= "*"
+num_cpus = "*"
+soup = "*"
+chrono = "*"
+isahc = "*"
+warc = "*"
+lingua = {version = "*" , features = ["english","arabic","french"]}

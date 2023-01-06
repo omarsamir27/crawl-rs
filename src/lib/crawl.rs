@@ -1,41 +1,33 @@
-use crate::crawl_utils;
-use futures::future::join_all;
-use num_cpus;
-use reqwest::header::{HeaderMap, HeaderValue};
-use soup::Soup;
 use std::collections::VecDeque;
+use std::fmt::{format, Debug};
+use std::fs::File;
+use std::io::{BufWriter, Read};
+use std::net::IpAddr;
+use std::os::linux::raw::stat;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering::Relaxed;
+use std::time::Duration;
+
+use futures::future::join_all;
+use futures::FutureExt;
+use libflate::{finish, gzip};
+use num_cpus;
+use rayon::prelude::*;
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{StatusCode, Version};
+use soup::Soup;
 use tokio::task::JoinHandle;
+use warc::{BufferedBody, RawRecordHeader, Record, RecordType, WarcHeader, WarcWriter};
+use whatlang::{Detector,Lang};
 
-type CrawlQueue = Arc<tokio::sync::Mutex<VecDeque<CrawlEntry>>>;
-type ScrapQueue = Arc<tokio::sync::Mutex<VecDeque<ScrapEntry>>>;
+use crate::lang::has_language;
+use crate::response::{Response, ResponseError, WetRecord};
+use crate::{crawl_utils, lang};
 
-struct Response {
-    url: String,
-    data: String,
-    content_length: u64,
-    headers: String,
-    time: String,
-}
-
-impl Response {
-    fn new(url: &str, data: &str, content_length: u64, headers: &HeaderMap, time: &str) -> Self {
-        let mut headers = headers.clone();
-        headers.insert("content-length", HeaderValue::from(content_length));
-        let headers = crawl_utils::http_headers_fmt(&headers);
-        Response {
-            url: url.to_string(),
-            data: data.to_string(),
-            content_length,
-            headers,
-            time: time.to_string(),
-        }
-    }
-    fn to_soup(&self) -> Soup {
-        return Soup::new(self.data.as_str());
-    }
-}
+type CrawlQueue = Arc<std::sync::Mutex<Vec<CrawlEntry>>>;
+type ScrapQueue = Arc<std::sync::Mutex<Vec<ScrapEntry>>>;
+type WetFile = Arc<WarcWriter<std::io::BufWriter<libflate::gzip::Encoder<std::fs::File>>>>;
 
 struct CrawlEntry {
     url: String,
@@ -49,8 +41,6 @@ struct ScrapEntry {
 
 pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
     let num_cores = num_cpus::get_physical() as u32;
-    let num_crawlers = (2 / 3) * num_cores;
-    let num_scrapers = (1 / 3) * num_cores;
     let crawl_entries: Vec<CrawlEntry> = seedlist
         .into_iter()
         .map(|url| CrawlEntry {
@@ -58,93 +48,141 @@ pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
             crawl_depth: initial_depth,
         })
         .collect();
-    let url_queue: CrawlQueue = Arc::new(tokio::sync::Mutex::new(VecDeque::from(crawl_entries)));
-    let page_queue: ScrapQueue = Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
+    let url_queue: CrawlQueue = Arc::new(Mutex::new(Vec::from(crawl_entries)));
+    let page_queue: ScrapQueue = Arc::new(Mutex::new(Vec::new()));
     let num_visited = Arc::new(AtomicU32::new(0));
-    let num_processed = Arc::new(AtomicU32::new(0));
-    let rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-    let mut futures = vec![];
-    for _ in 0..num_crawlers {
-        let urlQ = url_queue.clone();
-        let pageQ = page_queue.clone();
-        let visited = num_visited.clone();
-        futures.push(tokio::spawn(async move {
-            crawl_url(urlQ, pageQ, visited).await
-        }))
-    }
-    for _ in 0..num_scrapers {
-        let urlQ = url_queue.clone();
-        let pageQ = page_queue.clone();
-        let processed = num_processed.clone();
-        futures.push(tokio::spawn(async move {
-            scrap_page(urlQ, pageQ, processed).await
-        }))
+    let num_bad = Arc::new(AtomicU32::new(0));
+
+    let mut wet_file = WarcWriter::from_path_gzip("warc_0000.warc.wet.gz").unwrap();
+    // let mut wet_file_barrier = Arc::new(Mutex::new(0));
+    let mut processed_counter = Arc::new(AtomicU32::new(0));
+    let model_langs = vec!["arabic", "english"];
+    let lang_detector = lang::build_langdetector(model_langs);
+    // let accept_langs = vec![Lang::Arabic];
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    while !url_queue.lock().unwrap().is_empty() || !page_queue.lock().unwrap().is_empty() {
+        println!("urlQ: {}", url_queue.lock().unwrap().len());
+        println!("pageQ: {}", page_queue.lock().unwrap().len());
+        let mut futures = vec![];
+        for _ in 0..20 {
+            let urlQ = url_queue.clone();
+            let pageQ = page_queue.clone();
+            let visited = num_visited.clone();
+            let bad = num_bad.clone();
+            let future = async move { crawl_url(urlQ, pageQ, visited, bad,20).await };
+            futures.push(future)
+        }
+        rt.block_on(join_all(futures));
+        println!("WAS ABLE TO CRAWL {}", num_visited.load(Ordering::Relaxed));
+        println!("BAD LINK {}", num_bad.load(Ordering::Relaxed));
+
+        let mut wetQ: Vec<(Option<Vec<CrawlEntry>>, WetRecord)> = page_queue
+            .lock()
+            .unwrap()
+            .par_iter()
+            .map(|response| {
+                process_page(
+                    response,
+                    &lang_detector,
+                    Lang::Ara,
+                    processed_counter.clone(),
+                )
+            })
+            .collect();
+
+        let mut url_q_lock = url_queue.lock().unwrap();
+        for mut entry in wetQ {
+            if let Some(mut links) = entry.0 {
+                if links.is_empty(){
+                    println!("LINKS EMPTY , NOTHING TO ADD");
+                }
+                url_q_lock.append(&mut links)
+            }
+            let bytes_written = wet_file.write_raw(entry.1.headers, &entry.1.body).unwrap();
+        }
+        page_queue.lock().unwrap().clear();
+        // break
     }
 
-    rt.block_on(join_all(futures));
+    unsafe {
+        let gzip_stream = wet_file.into_inner().unwrap_unchecked();
+        gzip_stream.finish().into_result().unwrap();
+    }
 }
 
-async fn crawl_url(urls_queue: CrawlQueue, page_queue: ScrapQueue, visited: Arc<AtomicU32>) {
+async fn crawl_url(
+    urls_queue: CrawlQueue,
+    page_queue: ScrapQueue,
+    visited: Arc<AtomicU32>,
+    num_bad: Arc<AtomicU32>,
+    url_limit: i32,
+) {
     let client: reqwest::Client = reqwest::Client::new();
-    while !urls_queue.lock().await.is_empty() {
-        let crawl_entry = urls_queue.lock().await.pop_front().unwrap();
-        let resp = client.get(crawl_entry.url.to_owned()).send().await;
+    let state = urls_queue.lock().unwrap().is_empty();
+    // println!("empty:{}",state);
+    let mut limit = 0 ;
+    while !state && limit != url_limit {
+        // println!("here");
+        let crawl_entry = urls_queue.lock().unwrap().pop();
+        if crawl_entry.is_none() {
+            break;
+        }
+        let crawl_entry = crawl_entry.unwrap();
+        let resp = client.get(crawl_entry.url.to_owned()).timeout(Duration::from_millis(500)).send().await;
         if resp.is_err() {
+            num_bad.fetch_add(1,Relaxed);
             continue;
         }
         let resp = resp.unwrap();
-        let content_length: u64 = match resp.content_length() {
-            None => 0,
-            Some(length) => length,
+        let response = Response::from_request(resp).await;
+        let response = match response {
+            Ok(resp) => {resp }
+            Err(_) => {
+                num_bad.fetch_add(1,Relaxed);
+                continue;
+            }
         };
-        let headers = resp.headers().clone();
-        let text = resp.text().await;
-        if text.is_err() {
-            continue;
-        }
-        let time = chrono::Local::now().to_string();
-        let text = text.unwrap();
-
-        let response = Response::new(
-            crawl_entry.url.as_str(),
-            text.as_str(),
-            content_length,
-            &headers,
-            time.as_str(),
-        );
         let scrap_entry = ScrapEntry {
             response,
             crawl_depth: crawl_entry.crawl_depth - 1,
         };
-        page_queue.lock().await.push_back(scrap_entry);
+        page_queue.lock().unwrap().push(scrap_entry);
         visited.fetch_add(1, Ordering::Relaxed);
 
         println!("{}", visited.load(Ordering::Relaxed));
+        limit +=1;
     }
 }
 
-async fn scrap_page(urls_queue: CrawlQueue, page_queue: ScrapQueue, processed: Arc<AtomicU32>) {
-    while !page_queue.lock().await.is_empty() {
-        let scrap_entry = page_queue.lock().await.pop_front().unwrap();
-        let (text, links) = {
-            let soup = scrap_entry.response.to_soup();
-            let text = soup.text();
-            if scrap_entry.crawl_depth != 0 {
-                (text, Some(crawl_utils::soup_links(&soup, &[])))
-            } else {
-                (text, None)
+fn process_page(
+    response: &ScrapEntry,
+    lang_detector: &Detector,
+    accept_langs: Lang,
+    processed: Arc<AtomicU32>,
+) -> (Option<Vec<CrawlEntry>>, WetRecord) {
+    let soup = response.response.to_soup();
+    let wet_record = response.response.to_warcrecord(Some(&soup));
+    processed.fetch_add(1,Relaxed);
+    if response.crawl_depth != 0 {
+        let has_target_langs = has_language(lang_detector, &wet_record.body, accept_langs,4);
+        if has_target_langs {
+            let outlinks = crawl_utils::soup_links(&soup, &[]);
+            if !outlinks.is_empty() {
+                let outlinks: Vec<CrawlEntry> = outlinks
+                    .into_iter()
+                    .map(|link| CrawlEntry {
+                        url: link,
+                        crawl_depth: response.crawl_depth,
+                    })
+                    .collect();
+
+                return (Some(outlinks), wet_record);
             }
-        };
-        if links.is_some() {
-            let links: Vec<CrawlEntry> = links
-                .unwrap()
-                .into_iter()
-                .map(|link| CrawlEntry {
-                    url: link,
-                    crawl_depth: scrap_entry.crawl_depth,
-                })
-                .collect();
-            urls_queue.lock().await.extend(links);
         }
     }
+    return (None, wet_record);
 }

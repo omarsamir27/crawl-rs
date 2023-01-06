@@ -1,4 +1,3 @@
-use lingua::Language;
 use reqwest::header::HeaderMap;
 use soup;
 use soup::{NodeExt, QueryBuilderExt, Soup};
@@ -58,15 +57,4 @@ pub fn soup_links(soup: &Soup, protocols: &[String]) -> Vec<String> {
 #[inline]
 pub fn soup_text(soup: &Soup) -> String {
     soup.text()
-}
-
-pub fn has_language(text: &str, languages: Vec<Language>) -> bool {
-    let detector = lingua::LanguageDetectorBuilder::from_all_languages().build();
-    let detected_langs = detector.compute_language_confidence_values(text);
-    for (lang, confidence) in detected_langs {
-        if languages.contains(&lang) {
-            return true;
-        }
-    }
-    return false;
 }

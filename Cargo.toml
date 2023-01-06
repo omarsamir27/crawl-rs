@@ -24,5 +24,8 @@ num_cpus = "*"
 soup = "*"
 chrono = "*"
 isahc = "*"
-warc = "*"
-lingua = {version = "*" , features = ["english","arabic","french"]}
+warc = { version="*" , features = ["gzip"] }
+#lingua = {version = "*" , features = ["english","arabic","french"]}
+rayon = "*"
+libflate = "1"
+whatlang = "0.16.2"

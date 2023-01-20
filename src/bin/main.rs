@@ -3,7 +3,7 @@ use whatlang::{Detector,Lang};
 use soup::Soup;
 
 fn main() {
-    let urls = crawl_utils::file_lines("0000.warc_urls");
+    let urls = crawl_utils::file_lines("SMALL0000.warc_urls");
     crawl::crawl(urls, 2);
     // // // let text = include_str!("402081.html");
     // // // let soup = Soup::new(text);

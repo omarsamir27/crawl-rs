@@ -26,6 +26,8 @@ chrono = "*"
 isahc = "*"
 warc = { version="*" , features = ["gzip"] }
 #lingua = {version = "*" , features = ["english","arabic","french"]}
-rayon = "*"
+rayon = "1.6.1"
+flate2 = "1.0.25"
 libflate = "1"
 whatlang = "0.16.2"
+#warc = {path = "warc"}

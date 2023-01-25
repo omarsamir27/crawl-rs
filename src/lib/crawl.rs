@@ -44,7 +44,6 @@ struct ScrapEntry {
 }
 
 pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
-    let num_cores = num_cpus::get_physical() as u32;
     let crawl_entries: Vec<CrawlEntry> = seedlist
         .into_iter()
         .map(|url| CrawlEntry {
@@ -52,8 +51,9 @@ pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
             crawl_depth: initial_depth,
         })
         .collect();
-    // let mut wetQ  = Arc::new(Mutex::new(Vec::new()));
-    let (tx,rx) = channel();
+    let (tx_bgwriter,rx_bgwriter) = channel();
+    let (tx_url,rx_url) = crossbeam::channel::unbounded();
+    let (tx_crawled,rx_crawled) = crossbeam::channel::unbounded();
     let url_queue: CrawlQueue = Arc::new(Mutex::new(Vec::from(crawl_entries)));
     let page_queue: ScrapQueue = Arc::new(Mutex::new(Vec::new()));
     let visited_map = Arc::new(RwLock::new(HashSet::new()));
@@ -61,7 +61,6 @@ pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
     let num_bad = Arc::new(AtomicU32::new(0));
 
     let mut wet_file = WarcWriter::from_path_gzip("warc_0000.warc.wet.gz").unwrap();
-    // let mut wet_file_barrier = Arc::new(Mutex::new(0));
     let mut processed_counter = Arc::new(AtomicU32::new(0));
     let model_langs = vec!["arabic", "english"];
     let lang_detector = lang::build_langdetector(model_langs);
@@ -75,6 +74,7 @@ pub fn crawl(seedlist: Vec<String>, initial_depth: u8) {
             background_writer(rx,wet_file)
         }
     );
+
     while !url_queue.lock().unwrap().is_empty() || !page_queue.lock().unwrap().is_empty() {
         println!("urlQ: {}", url_queue.lock().unwrap().len());
         println!("pageQ: {}", page_queue.lock().unwrap().len());

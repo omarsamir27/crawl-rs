@@ -1,10 +1,12 @@
+#![feature(async_closure)]
+
 extern crate core;
 
-pub mod crawl;
+// pub mod crawl;
 pub mod crawl_utils;
 mod lang;
 pub mod response;
-mod crawl2;
+pub mod crawl2;
 
 pub struct CrawlEntry {
     pub url: String,
@@ -12,6 +14,6 @@ pub struct CrawlEntry {
 }
 
 pub struct ScrapEntry {
-    pub response: super::Response,
+    pub response: crate::response::Response,
     pub crawl_depth: u8,
 }

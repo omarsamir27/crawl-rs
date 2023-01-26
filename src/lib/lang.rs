@@ -39,7 +39,7 @@ pub fn has_language(detector: &Detector, text: &str, language: Lang,detection_gr
     };
     let text_piece : Vec<&str> = text.split(" ").collect();
     for txt in text_piece{
-        println!("NOT ENOUGH");
+        // println!("NOT ENOUGH");
         if let Some(lang) = detector.detect_lang( txt )
         {
             if lang == language {

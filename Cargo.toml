@@ -20,7 +20,7 @@ path = "src/bin/main.rs"
 tokio = {version = "*" , features = ["full"]}
 reqwest =  {version = "*" , features = ["gzip"]}
 futures= "*"
-num_cpus = "*"
+#num_cpus = "*"
 soup = "*"
 chrono = "*"
 isahc = "*"
@@ -28,7 +28,6 @@ warc = { version="*" , features = ["gzip"] }
 #crossbeam = "0.8.2"
 async-channel = "1.8.0"
 #lingua = {version = "*" , features = ["english","arabic","french"]}
-rayon = "1.6.1"
 #flate2 = "1.0.25"
 libflate = "1"
 whatlang = "0.16.2"

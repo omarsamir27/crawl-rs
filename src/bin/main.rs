@@ -1,10 +1,19 @@
-use libcrawl::{crawl, crawl_utils};
+use libcrawl::{crawl2, crawl_utils, CrawlEntry};
 use whatlang::{Detector,Lang};
 use soup::Soup;
 
+const src : &str = "0000.warc_urls";
+const dst : &str = "reswarcs.warc.wet.gz";
+
 fn main() {
-    let urls = crawl_utils::file_lines("SMALL0000.warc_urls");
-    crawl::crawl(urls, 2);
+    let urls = crawl_utils::file_lines(src).into_iter()
+        .map(|url| CrawlEntry {
+            url,
+            crawl_depth: 2,
+        })
+        .collect();
+    crawl2::start_crawl(urls,dst,1000);
+    // crawl::crawl(urls, 2);
     // // // let text = include_str!("402081.html");
     // // // let soup = Soup::new(text);
     // // // let txt = soup.text();

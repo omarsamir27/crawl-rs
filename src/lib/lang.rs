@@ -14,7 +14,7 @@ fn str_to_lang(lang: &str) -> Option<Lang> {
     }
 }
 
-fn lang_builder(langs: Vec<&str>) -> Vec<Lang> {
+pub fn lang_builder(langs: Vec<&str>) -> Vec<Lang> {
     let mut detect_langs = Vec::new();
     for lang in langs {
         if let Some(language) = str_to_lang(lang) {
@@ -30,20 +30,19 @@ pub fn build_langdetector(langs: Vec<&str>) -> Detector {
     Detector::with_allowlist(langs)
 }
 
-pub fn has_language(detector: &Detector, text: &str, language: Lang,detection_granularity:usize) -> bool {
-    let text_len = text.len();
+pub fn has_language(detector: &Detector, text: &str, languages: &[Lang], detection_granularity:usize) -> bool {
     if let Some(lang) = detector.detect_lang(text){
-        if lang == language{
+        if languages.contains(&lang){
             return true;
         }
     };
-    let text_piece : Vec<&str> = text.split(" ").collect();
+    let text_piece = text.split(' ');
     for txt in text_piece{
         // println!("NOT ENOUGH");
         if let Some(lang) = detector.detect_lang( txt )
         {
-            if lang == language {
-                return true
+            if languages.contains(&lang){
+                return true;
             }
         }
     }

@@ -65,6 +65,9 @@ impl Response {
                     WarcHeader::RecordID,
                     Record::<BufferedBody>::generate_record_id().into_bytes(),
                 ),
+                (WarcHeader::TargetURI,
+                    self.url.clone().into_bytes()
+                ),
                 (
                     WarcHeader::WarcType,
                     RecordType::WarcInfo.to_string().into_bytes(),

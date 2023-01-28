@@ -16,14 +16,21 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
+use config::Config;
 use tokio::sync::RwLock as AsyncRwLock;
 use warc::WarcWriter;
 use whatlang::{Detector, Lang};
 
 type WetFile = Arc<WarcWriter<std::io::BufWriter<Encoder<std::fs::File>>>>;
 
-pub fn start_crawl(seeds: Vec<CrawlEntry>, file: &str, crawler_count: usize) {
-    let mut wet_file = WarcWriter::from_path_gzip(file).unwrap();
+pub fn start_crawl(seeds: Vec<CrawlEntry>, job :&Config) {
+    let (warc_dst,crawler_count,link_timeout,accept_langs ) =
+        (job.get_string("destination_warc").unwrap(),
+         job.get_int("crawl_tasks").unwrap() as usize,
+         job.get_int("link_timeout").unwrap() as u64,
+         job.get_array("accept_languages").unwrap().into_iter().map(|value| value.into_string().unwrap()).collect::<Vec<String>>()
+        );
+    let wet_file = WarcWriter::from_path_gzip(warc_dst).unwrap();
     let (tx_processor_writer, rx_bgwriter) = std_channel();
     let (tx_processor, rx_crawler) = async_channel::unbounded();
     let (tx_crawler, rx_processor) = std_channel::<ScrapEntry>();
@@ -31,6 +38,7 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, file: &str, crawler_count: usize) {
     let visited_url_count = Arc::new(AtomicU32::new(0));
     let bad_url_count = Arc::new(AtomicU32::new(0));
     let model_langs = vec!["arabic", "english"];
+    let accept_langs = lang::lang_builder(accept_langs.iter().map(|lang|lang.as_str()).collect());
     let lang_detector = lang::build_langdetector(model_langs);
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -53,22 +61,21 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, file: &str, crawler_count: usize) {
             visited_urls.clone(),
             visited_url_count.clone(),
             bad_url_count.clone(),
-            Duration::from_millis(5000),
+            Duration::from_millis(link_timeout ),
             started_crawling.clone(),
         ));
     }
-    // let rx_processor = Arc::new(rx_processor);
-    let mut total_extra = Arc::new(AtomicUsize::default());
-    let mut send = total_extra.clone();
+    let total_extra = Arc::new(AtomicUsize::default());
+    let send = total_extra.clone();
     rt.spawn_blocking(move || {
         println!("entered proc");
-        while started_crawling.load(Ordering::Relaxed) == false {
+        while !started_crawling.load(Ordering::Relaxed) {
             sleep(Duration::from_secs(5));
         }
         loop {
             match &rx_processor.recv_timeout(Duration::from_secs(60)) {
                 Ok(crawled) => {
-                    let out = process_crawled(crawled, &lang_detector, Lang::Ara);
+                    let out = process_crawled(crawled, &lang_detector, &accept_langs);
                     tx_processor_writer.send(out.0).unwrap();
                     if let Some(links) = out.1 {
                         send.fetch_add(links.len(),Ordering::Relaxed);
@@ -153,7 +160,7 @@ async fn crawl_url(
                 }
             }
             Err(e) => {
-                println!("crawl bye {}", idx);
+                println!("crawl bye {idx}");
                 break;
             }
         }
@@ -163,7 +170,7 @@ async fn crawl_url(
 fn process_crawled(
     response: &ScrapEntry,
     lang_detector: &Detector,
-    accept_langs: Lang,
+    accept_langs: &Vec<Lang>,
 ) -> (WetRecord, Option<Vec<CrawlEntry>>) {
     let soup = response.response.to_soup();
     let wet_record = response.response.to_warcrecord(Some(&soup));
@@ -185,11 +192,8 @@ fn process_crawled(
     (wet_record, outlinks)
 }
 fn background_writer(records: Receiver<WetRecord>, mut warc: WarcWriter<BufWriter<Encoder<File>>>) {
-    loop {
-        match records.recv() {
-            Ok(rec) => warc.write_raw(rec.headers, &rec.body).unwrap(),
-            Err(_) => break,
-        };
+    while let Ok(rec) = records.recv() {
+        warc.write_raw(rec.headers, &rec.body).unwrap();
     }
     println!("finish");
     unsafe {

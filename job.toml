@@ -1,5 +1,5 @@
 seeds = "0000.warc_urls"
-crawl_tasks = 50
+crawl_tasks = 1000
 link_timeout = 5000
 crawl_recursion = 2
-accept_languages =  ["ar"]
+accept_languages =  []

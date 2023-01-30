@@ -126,6 +126,7 @@ impl Response {
 //     }
 // }
 
+#[derive(Debug)]
 pub enum ResponseError {
     RequestError,
     TextError,

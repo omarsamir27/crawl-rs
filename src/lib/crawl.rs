@@ -67,6 +67,8 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, job :&Config) {
     }
     let total_extra = Arc::new(AtomicUsize::default());
     let send = total_extra.clone();
+    let accept_all = accept_langs.is_empty();
+    println!("accept:{}",accept_all);
     rt.spawn_blocking(move || {
         println!("entered proc");
         while !started_crawling.load(Ordering::Relaxed) {
@@ -75,7 +77,7 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, job :&Config) {
         loop {
             match &rx_processor.recv_timeout(Duration::from_secs(60)) {
                 Ok(crawled) => {
-                    let out = process_crawled(crawled, &lang_detector, &accept_langs);
+                    let out = process_crawled(crawled, &lang_detector, &accept_langs,accept_all);
                     tx_processor_writer.send(out.0).unwrap();
                     if let Some(links) = out.1 {
                         send.fetch_add(links.len(),Ordering::Relaxed);
@@ -141,9 +143,9 @@ async fn crawl_url(
                 let response = match resp {
                     Ok(resp) => match Response::from_request(resp).await {
                         Ok(resp) => Some(resp),
-                        Err(_) => None,
+                        Err(e) => { eprintln!("{e:?}") ; None },
                     },
-                    Err(_) => None,
+                    Err(e) => { eprintln!("{e:?}") ; None },
                 };
 
                 if let Some(response) = response {
@@ -171,11 +173,12 @@ fn process_crawled(
     response: &ScrapEntry,
     lang_detector: &Detector,
     accept_langs: &Vec<Lang>,
+    accept_all:bool
 ) -> (WetRecord, Option<Vec<CrawlEntry>>) {
     let soup = response.response.to_soup();
     let wet_record = response.response.to_warcrecord(Some(&soup));
     let outlinks = if response.crawl_depth != 0
-        && has_language(lang_detector, &wet_record.body, accept_langs, 4)
+        && (accept_all || has_language(lang_detector, &wet_record.body, accept_langs, 4))
     {
         Some(
             crawl_utils::soup_links(&soup, &[])

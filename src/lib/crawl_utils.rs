@@ -1,9 +1,14 @@
+use crate::robots::Robots;
 use crate::CrawlEntry;
+use ahash::AHashMap;
+use itertools::Itertools;
 use reqwest::header::HeaderMap;
 use soup;
 use soup::{NodeExt, QueryBuilderExt, Soup};
+use std::collections::hash_map::Entry;
 use std::fmt::Display;
 use std::fs;
+use std::hash::Hash;
 use std::path::Path;
 use url::Url;
 
@@ -63,9 +68,50 @@ pub fn soup_text(soup: &Soup) -> String {
 }
 
 pub fn init_seed_list(file: &Path, recursion_depth: u8) -> Vec<CrawlEntry> {
-    file_lines(file)
+    let initial = file_lines(file)
         .into_iter()
+        .unique()
         .filter(|url| Url::parse(url).is_ok())
         .map(|url| CrawlEntry::new(url, recursion_depth))
-        .collect()
+        .collect();
+    disperse_domains(initial)
+}
+
+#[inline]
+fn push_or_insert<K, V>(map: &mut AHashMap<K, Vec<V>>, key: K, value: V)
+where
+    K: Hash + Eq + Clone,
+{
+    let entry = map.entry(key);
+    match entry {
+        Entry::Occupied(_) => {
+            entry.and_modify(|v| v.push(value));
+        }
+        Entry::Vacant(_) => {
+            entry.or_insert(vec![value]);
+        }
+    };
+}
+
+#[inline]
+pub fn disperse_domains(links: Vec<CrawlEntry>) -> Vec<CrawlEntry> {
+    let capacity = links.capacity();
+    let count = links.len();
+    let mut round_map: AHashMap<String, Vec<CrawlEntry>> = ahash::AHashMap::new();
+    for link in links {
+        let domain = Robots::extract_domain(&link.url).unwrap();
+        push_or_insert(&mut round_map, domain, link);
+    }
+    let mut buckets: Vec<Vec<CrawlEntry>> = round_map.into_values().collect();
+    let mut results = Vec::with_capacity(capacity);
+    let bucket_count = buckets.len();
+    for bucket in (0..bucket_count).cycle() {
+        if let Some(url) = buckets[bucket].pop() {
+            results.push(url);
+        }
+        if results.len() == count {
+            break;
+        }
+    }
+    results
 }

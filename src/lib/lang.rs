@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::HashSet;
 use std::io::BufRead;
-use whatlang::{Detector, Lang,};
+use whatlang::{Detector, Lang};
 
 #[inline(always)]
 fn str_to_lang(lang: &str) -> Option<Lang> {
@@ -30,18 +30,16 @@ pub fn build_langdetector(langs: Vec<&str>) -> Detector {
     Detector::with_allowlist(langs)
 }
 
-pub fn has_language(detector: &Detector, text: &str, languages: &[Lang], detection_granularity:usize) -> bool {
-    if let Some(lang) = detector.detect_lang(text){
-        if languages.contains(&lang){
+pub fn has_language(detector: &Detector, text: &str, languages: &[Lang]) -> bool {
+    if let Some(lang) = detector.detect_lang(text) {
+        if languages.contains(&lang) {
             return true;
         }
     };
     let text_piece = text.split(' ');
-    for txt in text_piece{
-        // println!("NOT ENOUGH");
-        if let Some(lang) = detector.detect_lang( txt )
-        {
-            if languages.contains(&lang){
+    for txt in text_piece {
+        if let Some(lang) = detector.detect_lang(txt) {
+            if languages.contains(&lang) {
                 return true;
             }
         }

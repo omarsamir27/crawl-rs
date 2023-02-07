@@ -20,7 +20,7 @@ fn main() -> ExitCode {
         seeds_file.as_ref(),
         job.get_int("crawl_recursion").unwrap() as u8,
     );
-    crawl::start_crawl(seeds,&job);
+    crawl::start_crawl(seeds, &job);
     ExitCode::SUCCESS
 }
 

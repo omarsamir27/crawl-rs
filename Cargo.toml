@@ -31,3 +31,7 @@ config = "0.13.3"
 url = "2.3.1"
 thiserror = "*"
 phf = { version = "*", features = ["macros"] }
+chashmap-async = "0.1.0"
+texting_robots = "0.2.1"
+ahash = {version = "0.8.3" , features = ["std"]}
+itertools = "0.10.5"

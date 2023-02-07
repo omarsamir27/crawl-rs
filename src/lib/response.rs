@@ -65,9 +65,7 @@ impl Response {
                     WarcHeader::RecordID,
                     Record::<BufferedBody>::generate_record_id().into_bytes(),
                 ),
-                (WarcHeader::TargetURI,
-                    self.url.clone().into_bytes()
-                ),
+                (WarcHeader::TargetURI, self.url.clone().into_bytes()),
                 (
                     WarcHeader::WarcType,
                     RecordType::WarcInfo.to_string().into_bytes(),
@@ -84,14 +82,11 @@ impl Response {
         };
         WetRecord {
             headers,
-            body: String::from(text),
+            body: text,
         }
     }
     pub async fn from_request(resp: Resp) -> Result<Self, ResponseError> {
-        let content_length: u64 = match resp.content_length() {
-            None => 0,
-            Some(length) => length,
-        };
+        let content_length: u64 = resp.content_length().unwrap_or(0);
 
         let headers = resp.headers().clone();
         let ip = resp.remote_addr().unwrap().ip();

@@ -1,11 +1,13 @@
+#![feature(let_chains)]
 
 extern crate core;
 
-pub mod job_config;
 pub mod crawl;
 pub mod crawl_utils;
+pub mod job_config;
 mod lang;
 pub mod response;
+pub mod robots;
 // pub mod crawl2;
 
 pub struct CrawlEntry {

@@ -1,8 +1,12 @@
-use crate::crawl_utils::disperse_domains;
-use crate::lang::has_language;
-use crate::response::{Response, WetRecord};
-use crate::robots::{Robots, RobotsVerdict};
-use crate::{crawl_utils, lang, CrawlCounters, CrawlEntry, ScrapEntry};
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::mem;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel as std_channel, Receiver, Sender};
+use std::thread::sleep;
+use std::time::Duration;
+
 use ahash::AHashSet;
 use async_channel::Receiver as AsyncReceiver;
 use async_channel::Sender as AsyncSender;
@@ -11,17 +15,15 @@ use config::Config;
 use futures::future::join_all;
 use libflate::gzip::Encoder;
 use reqwest::{Client, Error};
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::mem;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel as std_channel, Receiver, Sender};
-use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 use url::Url;
 use warc::WarcWriter;
 use whatlang::{Detector, Lang};
+
+use crate::{crawl_utils, CrawlCounters, CrawlEntry, lang, ScrapEntry};
+use crate::crawl_utils::disperse_domains;
+use crate::lang::has_language;
+use crate::response::{Response, WetRecord};
+use crate::robots::{Robots, RobotsVerdict};
 
 type WetFile = WarcWriter<BufWriter<Encoder<File>>>;
 
@@ -66,7 +68,7 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, job: &Config) {
     let started_crawling = Arc::new(AtomicBool::new(false));
     let mut crawlers = Vec::with_capacity(crawler_count);
     let client: reqwest::Client = reqwest::Client::builder()
-        // .connect_timeout(Duration::from_millis(link_timeout))
+        .connect_timeout(Duration::from_millis(link_timeout))
         .build()
         .unwrap();
     let robots = Arc::new(Robots::new());

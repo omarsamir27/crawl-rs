@@ -2,6 +2,13 @@
 name = "txtcrawl"
 version = "0.1.0"
 edition = "2021"
+authors = ["Omar Mohamed <omarmsamir27@gmail.com>"]
+description = "Web scrapper and crawler for text archiving"
+readme = "README.md"
+repository = "https://github.com/omarsamir27/crawl-rs"
+keywords = ["web", "crawling", "scraping", "warc", "archiving"]
+license = "GPL-3.0"
+license-file = "LICENSE.txt"
 
 [profile.release]
 opt-level = 3

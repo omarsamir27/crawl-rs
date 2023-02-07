@@ -1,8 +1,9 @@
-use crate::job_config::CrawlerConfigError::{MandatoryFieldMissing, WrongFieldType};
-use config::builder::DefaultState;
 use config::{Config, ConfigBuilder, ConfigError, Source};
+use config::builder::DefaultState;
 use phf::phf_map;
 use thiserror::Error;
+
+use crate::job_config::CrawlerConfigError::{MandatoryFieldMissing, WrongFieldType};
 
 static TYPE_CHECKS: phf::Map<&'static str, &'static str> = phf_map! {
             "seeds"=>"string",
@@ -55,7 +56,7 @@ pub fn check_config(config: &Config) -> Option<Vec<CrawlerConfigError>> {
             "bool" if v.clone().into_bool().is_err() => {
                 errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
             }
-            "string" if v.clone().into_string().is_err() => {
+            "string" if v.clone().into_string().is_err() || v.clone().into_string().contains(&"") => {
                 errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
             }
             "uint" if v.clone().into_uint().is_err() => {

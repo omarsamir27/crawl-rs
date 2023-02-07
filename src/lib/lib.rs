@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 #![feature(is_some_and)]
+#![feature(option_result_contains)]
 
 extern crate core;
 

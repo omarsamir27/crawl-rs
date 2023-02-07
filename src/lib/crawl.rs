@@ -99,7 +99,7 @@ pub fn start_crawl(seeds: Vec<CrawlEntry>, job: &Config) {
                     tx_processor_writer.send(out.0).unwrap();
                     if let Some(mut links) = out.1 {
                         links.retain(|i| {
-                            url::Url::parse(&(i.url)).is_ok_and(|url| !url.cannot_be_a_base())
+                            url::Url::parse(&(i.url)).is_ok_and(|url| !url.cannot_be_a_base() && ["http", "https"].contains(&url.scheme()))
                                 && known_urls.insert(i.url.clone())
                         });
                         if tx_processor.is_empty() || link_cache.len() >= 400 {

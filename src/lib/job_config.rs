@@ -1,8 +1,7 @@
 use crate::job_config::CrawlerConfigError::{MandatoryFieldMissing, WrongFieldType};
-use config::builder::{BuilderState, DefaultState};
-use config::{Config, ConfigBuilder, ConfigError, Map, Source, Value, ValueKind};
+use config::builder::DefaultState;
+use config::{Config, ConfigBuilder, ConfigError, Source};
 use phf::phf_map;
-use std::collections::HashMap;
 use thiserror::Error;
 
 static TYPE_CHECKS: phf::Map<&'static str, &'static str> = phf_map! {
@@ -11,17 +10,18 @@ static TYPE_CHECKS: phf::Map<&'static str, &'static str> = phf_map! {
             "link_timeout"=>"uint",
             "crawl_tasks"=>"uint",
             "crawl_recursion"=>"uint",
-            "accept_languages"=>"vec<string>"
+            "accept_languages"=>"vec<string>",
+            "respect_robots" => "bool"
 };
 
-static CONFIG_DEFAULTS: phf::Map<&'static str, ValueKind> = phf_map! {
-            "crawl_tasks" => ValueKind::U64(50),
-            "link_timeout" => ValueKind::U64(5000),
-            "crawl_recursion" => ValueKind::U64(2),
-            /*
-              destination_warc and accept_languages should be defined in using function
-            */
-};
+// static CONFIG_DEFAULTS: phf::Map<&'static str, ValueKind> = phf_map! {
+//             "crawl_tasks" => ValueKind::U64(50),
+//             "link_timeout" => ValueKind::U64(5000),
+//             "crawl_recursion" => ValueKind::U64(2),
+//             /*
+//               destination_warc and accept_languages should be defined in using function
+//             */
+// };
 
 #[derive(Error, Debug)]
 pub enum CrawlerConfigError {
@@ -49,19 +49,17 @@ pub fn check_config(config: &Config) -> Option<Vec<CrawlerConfigError>> {
             errors.push(MandatoryFieldMissing(field.to_string()))
         }
     }
-    println!("{:?}", map);
     for (k, v) in &map {
-        let Type = *TYPE_CHECKS.get(k.as_str()).unwrap();
-        println!("{}\t\t{}\t\t{}", k, v, Type);
-        match Type {
+        let r#type = *TYPE_CHECKS.get(k.as_str()).unwrap();
+        match r#type {
             "bool" if v.clone().into_bool().is_err() => {
-                errors.push(WrongFieldType(k.to_string(), Type.to_string()))
+                errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
             }
             "string" if v.clone().into_string().is_err() => {
-                errors.push(WrongFieldType(k.to_string(), Type.to_string()))
+                errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
             }
             "uint" if v.clone().into_uint().is_err() => {
-                errors.push(WrongFieldType(k.to_string(), Type.to_string()))
+                errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
             }
             "vec<string>" => {
                 if let Ok(array) = v.clone().into_array() {
@@ -69,10 +67,10 @@ pub fn check_config(config: &Config) -> Option<Vec<CrawlerConfigError>> {
                         .iter()
                         .any(|string| string.clone().into_string().is_err())
                     {
-                        errors.push(WrongFieldType(k.to_string(), Type.to_string()))
+                        errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
                     }
                 } else {
-                    errors.push(WrongFieldType(k.to_string(), Type.to_string()))
+                    errors.push(WrongFieldType(k.to_string(), r#type.to_string()))
                 }
             }
             _ => continue,
@@ -100,5 +98,7 @@ pub fn default_config() -> ConfigBuilder<DefaultState> {
         )
         .unwrap()
         .set_default("accept_languages", accept_languages)
+        .unwrap()
+        .set_default("respect_robots", true)
         .unwrap()
 }

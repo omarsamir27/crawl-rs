@@ -1,10 +1,7 @@
-use config::{Config, ConfigError};
+use config::Config;
 use libcrawl::{crawl, crawl_utils, job_config};
 use std::path::Path;
 use std::process::ExitCode;
-
-const src: &str = "0000 (copy).warc_urls";
-const dst: &str = "reswarcs.warc.wet.gz";
 
 fn main() -> ExitCode {
     let job = match parse_config() {

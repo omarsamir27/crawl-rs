@@ -3,8 +3,10 @@ name = "txtcrawl"
 version = "0.1.0"
 edition = "2021"
 
-#[profile.dev]
-#opt-level = 3
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
 
 [lib]
 name = "libcrawl"
@@ -35,3 +37,4 @@ chashmap-async = "0.1.0"
 texting_robots = "0.2.1"
 ahash = {version = "0.8.3" , features = ["std"]}
 itertools = "0.10.5"
+colored = "2.0.0"

@@ -16,12 +16,14 @@ impl Robots {
         Url::parse(url)
     }
     pub fn to_domain(url: &Url) -> Option<Url> {
-        let domain = url.domain()?;
-        Self::valid_url(domain).ok()
+        let scheme = url.scheme();
+        let domain = url.host_str()?;
+        let domain = format!("{scheme}://{domain}");
+        Self::valid_url(domain.as_str()).ok()
     }
-    pub fn extract_domain(url:&str) -> Option<String>{
+    pub fn extract_domain(url: &str) -> Option<String> {
         let url = Self::valid_url(url).ok()?;
-        url.domain().map(|dom|dom.to_string())
+        url.host_str().map(|dom| dom.to_string())
     }
 
     pub async fn has_domain(&self, url: &Url) -> bool {
@@ -71,6 +73,7 @@ impl Rules {
     }
 }
 
+#[derive(Debug)]
 pub enum RobotsVerdict {
     ForbiddenPath,
     CrawlDelay,

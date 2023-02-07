@@ -1,5 +1,5 @@
-seeds = "enURLS"
-crawl_tasks = 1000
+seeds = "0000.warc_urls.copy"
+crawl_tasks = 20
 link_timeout = 10000
 crawl_recursion = 2
 accept_languages =  []

@@ -71,7 +71,7 @@ pub fn init_seed_list(file: &Path, recursion_depth: u8) -> Vec<CrawlEntry> {
     let initial = file_lines(file)
         .into_iter()
         .unique()
-        .filter(|url| Url::parse(url).is_ok())
+        .filter(|url| Url::parse(url).is_ok_and(|url| !url.cannot_be_a_base()))
         .map(|url| CrawlEntry::new(url, recursion_depth))
         .collect();
     disperse_domains(initial)
@@ -99,7 +99,14 @@ pub fn disperse_domains(links: Vec<CrawlEntry>) -> Vec<CrawlEntry> {
     let count = links.len();
     let mut round_map: AHashMap<String, Vec<CrawlEntry>> = ahash::AHashMap::new();
     for link in links {
-        let domain = Robots::extract_domain(&link.url).unwrap();
+        let domain = Robots::extract_domain(&link.url);
+        let domain = match domain {
+            Some(domain) => domain,
+            None => {
+                dbg!(&link.url);
+                continue;
+            }
+        };
         push_or_insert(&mut round_map, domain, link);
     }
     let mut buckets: Vec<Vec<CrawlEntry>> = round_map.into_values().collect();

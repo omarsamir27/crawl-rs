@@ -57,6 +57,7 @@ respect_robots = true
   website repeatedly.
 
 ### This work in inspired by `https://github.com/arcalex/txtcrawl` by [mraslann](https://github.com/mraslann)
+### This project is my internship work at [Bibliotheca Alexandrina Web Archiving Sector](https://github.com/arcalex/txtcrawl) 
 
 ### License
 

@@ -95,11 +95,22 @@ pub fn default_config() -> ConfigBuilder<DefaultState> {
         .unwrap()
         .set_default(
             "destination_warc",
-            chrono::offset::Local::now().to_rfc3339(),
+            get_time_string(),
         )
         .unwrap()
         .set_default("accept_languages", accept_languages)
         .unwrap()
         .set_default("respect_robots", true)
         .unwrap()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn get_time_string() -> String {
+    let file_name = chrono::offset::Local::now().to_rfc3339::<String>();
+    file_name.replace(":", "_")
+}
+
+#[cfg(target_os = "linux")]
+fn get_time_string() -> String {
+    chrono::offset::Local::now().to_rfc3339()
 }
